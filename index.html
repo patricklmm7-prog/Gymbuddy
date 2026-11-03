@@ -62,8 +62,13 @@
         .promo { background: var(--card); border-radius: 16px; padding: 1.5rem; margin: 1rem 0; display: flex; gap: 1.5rem; align-items: center; transition: all 0.3s; border: 1px solid var(--border); }
         .promo:hover { transform: scale(1.02); }
         .promo img { width: 130px; height: 90px; object-fit: cover; border-radius: 10px; }
-        .health-card { background: var(--card); border-radius: 16px; padding: 1.2rem; margin: 0.8rem 0; border: 1px solid var(--border); transition: all 0.3s; }
-        .health-card:hover { transform: scale(1.03); box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
+        .going-today { display: flex; gap: 1rem; overflow-x: auto; padding: 1rem 0; margin-bottom: 2rem; }
+        .going-card { min-width: 180px; background: var(--card); border-radius: 16px; padding: 1rem; text-align: center; border: 1px solid var(--border); position: relative; }
+        .going-card img { width: 70px; height: 70px; border-radius: 50%; object-fit: cover; margin-bottom: 0.5rem; }
+        .status-badge { font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 12px; margin-top: 0.3rem; display: inline-block; }
+        .status-now { background: #4caf50; color: white; }
+        .status-later { background: #ff9800; color: white; }
+        .checkin-btn { background: #4caf50; }
         h2 { color: var(--white); margin-bottom: 1rem; }
         body.light h2 { color: #111; }
     </style>
@@ -87,6 +92,15 @@
         <h1 id="heroTitle">Find Your Toronto Gym Buddy</h1>
         <p id="heroSub">Train Together · Progress Together</p>
     </section>
+
+    <div class="container">
+        <h2 style="text-align:center;">Going Today</h2>
+        <div class="going-today" id="goingToday"></div>
+        <div style="text-align:center; margin-bottom:2rem;">
+            <button class="cta-btn checkin-btn" id="checkInBtn" style="display:none;">Check In at My Gym</button>
+            <button class="cta-btn" id="goingLaterBtn" style="display:none; background:#ff9800;">Mark Going Today</button>
+        </div>
+    </div>
 
     <div class="container">
         <div class="filters">
@@ -378,6 +392,8 @@
                     alert(total > 0 ? `You have ${total} unread messages` : 'No unread messages');
                 };
                 editBtn.style.display = 'inline-block';
+                document.getElementById('checkInBtn').style.display = 'inline-block';
+                document.getElementById('goingLaterBtn').style.display = 'inline-block';
             } else {
                 area.innerHTML = `<a href="#" id="loginLink" style="color:white;">${t.login}</a>`;
                 document.getElementById('loginLink').onclick = e => { e.preventDefault(); document.getElementById('authModal').style.display = 'flex'; };
@@ -462,7 +478,52 @@
                 snap.forEach(d => { if (d.id !== currentUser?.uid) allUsers.push({ id: d.id, ...d.data() }); });
                 applyFilters();
                 updateMapUsers(allUsers);
+                renderGoingToday();
             });
+        };
+
+        function renderGoingToday() {
+            const container = document.getElementById('goingToday');
+            container.innerHTML = '';
+            const going = allUsers.filter(u => u.goingToday || u.checkedIn);
+            if (!going.length) {
+                container.innerHTML = '<p style="text-align:center; width:100%;">No one is going today yet. Be the first!</p>';
+                return;
+            }
+            going.forEach(u => {
+                const img = u.photoURL || 'https://via.placeholder.com/70';
+                const status = u.checkedIn ? '<span class="status-badge status-now">At gym now</span>' : '<span class="status-badge status-later">Going today</span>';
+                const card = document.createElement('div');
+                card.className = 'going-card';
+                card.innerHTML = `
+                    <img src="${img}" alt="${u.name}">
+                    <div><strong>${u.name || 'User'}</strong></div>
+                    <div style="font-size:0.85rem;">${u.gym || ''}</div>
+                    ${status}
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        document.getElementById('checkInBtn').onclick = async () => {
+            if (!currentUser || !myProfile.gym) { alert('Please set your gym in Profile first'); return; }
+            await updateDoc(doc(db, 'users', currentUser.uid), {
+                checkedIn: true,
+                goingToday: true,
+                lastCheckIn: serverTimestamp()
+            });
+            alert('Checked in!');
+            loadUsers();
+        };
+
+        document.getElementById('goingLaterBtn').onclick = async () => {
+            if (!currentUser || !myProfile.gym) { alert('Please set your gym in Profile first'); return; }
+            await updateDoc(doc(db, 'users', currentUser.uid), {
+                goingToday: true,
+                checkedIn: false
+            });
+            alert('Marked as going today!');
+            loadUsers();
         };
 
         window.applyFilters = function() {
